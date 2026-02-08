@@ -1,0 +1,239 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  // output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  name          String
+  user_code     String         @unique
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  is_active     Boolean        @default(true)
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([is_active])
+}
+
+model RefreshToken {
+  id         Int      @id @default(autoincrement())
+  token      String   @unique
+  fk_id_user Int
+  expires_at DateTime
+  is_revoked Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [fk_id_user], references: [id], onDelete: Cascade)
+
+  @@index([fk_id_user])
+  @@index([token])
+  @@index([expires_at])
+  @@index([is_revoked])
+}
+
+model Product {
+  id           Int                    @id @default(autoincrement())
+  name         String
+  description  String
+  fk_id_image  Int
+  price_per_kg Float
+  is_active    Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @default(now())
+  carts        CartItem[]
+  orders       OrderBatchAllocation[]
+  image        Image                  @relation(fields: [fk_id_image], references: [id])
+  batches      StockBatch[]
+
+  @@index([is_active])
+  @@index([name])
+}
+
+model StockBatch {
+  id                 Int                    @id @default(autoincrement())
+  quantity_produced  Float                  @default(0)
+  quantity_allocated Float                  @default(0)
+  price_per_kg       Float
+  batch_code         String                 @unique
+  start_date         DateTime
+  end_date           DateTime
+  is_active          Boolean                @default(true)
+  fk_id_product      Int                    @default(1)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @default(now())
+  orderAllocations   OrderBatchAllocation[]
+  product            Product                @relation(fields: [fk_id_product], references: [id])
+
+  @@index([is_active])
+  @@index([fk_id_product])
+  @@index([end_date])
+  @@index([start_date, end_date])
+}
+
+model Image {
+  id         Int       @id @default(autoincrement())
+  name       String
+  source_url String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now())
+  product    Product[]
+
+  @@index([name])
+}
+
+model Address {
+  id           Int        @id @default(autoincrement())
+  address_line String
+  pin_code     String?
+  city         String
+  district     String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  customers    Customer[]
+
+  @@index([city])
+  @@index([district])
+  @@index([pin_code])
+}
+
+model Customer {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String?
+  mobile_number String
+  fk_id_address Int
+  is_active     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  carts         Cart[]
+  address       Address  @relation(fields: [fk_id_address], references: [id])
+  orders        Order[]
+
+  @@index([email])
+  @@index([mobile_number])
+  @@index([is_active])
+}
+
+model Cart {
+  id             Int        @id @default(autoincrement())
+  cart_unique_id String     @unique
+  fk_id_customer Int
+  is_active      Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  customer       Customer   @relation(fields: [fk_id_customer], references: [id])
+  cartItems      CartItem[]
+  orders         Order[]
+
+  @@index([is_active])
+  @@index([fk_id_customer])
+}
+
+model CartItem {
+  id            Int      @id @default(autoincrement())
+  quantity      Float
+  fk_id_product Int
+  fk_id_cart    Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  cart          Cart     @relation(fields: [fk_id_cart], references: [id])
+  product       Product  @relation(fields: [fk_id_product], references: [id])
+
+  @@index([fk_id_product])
+  @@index([fk_id_cart])
+}
+
+model Order {
+  id                            Int                         @id @default(autoincrement())
+  order_unique_id               String                      @unique
+  is_active                     Boolean
+  is_created_by_admin           Boolean                     @default(false)
+  max_date_requsted_by_customer DateTime
+  delivery_date                 DateTime?
+  fk_id_customer                Int
+  fk_id_order_date_confirmation Int
+  fk_id_created_through_cart    Int?
+  order_status                  Int
+  createdAt                     DateTime                    @default(now())
+  updatedAt                     DateTime                    @updatedAt
+  cart                          Cart?                       @relation(fields: [fk_id_created_through_cart], references: [id])
+  customer                      Customer                    @relation(fields: [fk_id_customer], references: [id])
+  orderDateConfirmation         OrderDateConfirmationOption @relation(fields: [fk_id_order_date_confirmation], references: [id])
+  batchAllocations              OrderBatchAllocation[]
+
+  @@index([is_active])
+  @@index([fk_id_customer])
+  @@index([is_created_by_admin])
+}
+
+model OrderDateConfirmationOption {
+  id         Int      @id @default(autoincrement())
+  label      String   @unique
+  option_key String   @unique
+  is_active  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  orders     Order[]
+
+  @@index([is_active])
+}
+
+model OrderBatchAllocation {
+  id                 Int        @id @default(autoincrement())
+  fk_id_order        Int
+  fk_id_product      Int
+  fk_id_batch        Int
+  quantity_allocated Float
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  batch              StockBatch @relation(fields: [fk_id_batch], references: [id])
+  order              Order      @relation(fields: [fk_id_order], references: [id])
+  product            Product    @relation(fields: [fk_id_product], references: [id])
+
+  @@index([fk_id_order])
+  @@index([fk_id_product])
+  @@index([fk_id_batch])
+}
+
+model Enquiry {
+  id        Int      @id @default(autoincrement())
+  name      String
+  mobile    String
+  email     String?
+  message   String
+  is_read   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  @@index([is_read])
+  @@index([email])
+  @@index([mobile])
+}
+
+model ApiKey {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique
+  name       String?
+  is_active  Boolean  @default(true)
+  expires_at DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([key])
+  @@index([is_active])
+  @@index([expires_at])
+}
